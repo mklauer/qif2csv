@@ -38,6 +38,7 @@ class Main:
     '''
     LOG_NAME = "qif2csv.log"
     logger = logging.getLogger(__name__)
+    FILES_LOCATION = "Money Export 22_02_2020"
 
     def __init__(self):
         '''Do not use.
@@ -57,8 +58,10 @@ class Main:
 
         try:
             print ("Started.")
+            current_dir_name = os.path.dirname(__file__)
+            dir_name = os.path.join(current_dir_name, Main.FILES_LOCATION)
             Con = Convert()
-            Con.convert_to_csv()
+            Con.convert_to_csv(dir_name)
             time.sleep(1)
 
         except Exception as ex:
