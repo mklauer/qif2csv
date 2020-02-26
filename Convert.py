@@ -22,6 +22,7 @@ Created on 09 Feb 2020
 import sys
 import os, fnmatch
 import glob
+import datetime
 import logging
 
 class Convert:
@@ -29,7 +30,20 @@ class Convert:
     '''
     logger = logging.getLogger(__name__)
     FILE_EXTENSION = "*.qif"
+    RECORD_DELIMITER = "^"
     # {'^', 'S', '!Type:Invst\n', 'E', '$', '!Type:Cash\n', 'L', '!Type:Bank\n', 'C', 'P', 'M', '!Type:CCard\n', '!Type:Oth A\n', 'N', 'Q', 'Y', 'I', 'D', 'T'}
+
+    DETAIL_CODES_DICT_TITLES = {"I": "Price",
+                                "C": "Cleared",
+                                "P": "Description",
+                                "Y": "Security",
+                                "D": "Date",
+                                "Q": "Quantity",
+                                "T": "Amount (£)",
+                                "N": "Number",
+                                "L": "Category",
+                                "M": "Memo"}
+
     DETAIL_CODES_DICT = {"I": "Price.",
                         "C": "Cleared status. Values are blank (unreconciled/not cleared), '*' or 'c' (cleared) and 'X' or 'R' (reconciled).",
                         "P": "Payee. Or a description for deposits, transfers, etc.",
@@ -50,14 +64,11 @@ class Convert:
                     "!Type:CCard": "Cash Flow: Credit Card Account.",
                     "!Type:Oth A": "Property & Debt: Asset."}
 
-
     def __init__(self):
         '''
         Constructor
         '''
-        self.detail_codes = set()
-        # self.words = []
-        # self._load_file()
+        self.codes = set()
 
     def convert_to_csv(self, files_location):
         '''Convert the files to CSV format.
@@ -66,83 +77,218 @@ class Convert:
         self.files_list = self._get_files(files_location)
         print(self.files_list)
         for f in self.files_list:
-            self._read_file(files_location, f)
+            records_list = self._split_into_records(files_location, f)
+            header_type, header_lines, detail_records = self._parse_records(records_list)
+            # Print...
+            self._write_file(files_location, f, header_type, header_lines, detail_records)
 
-        print(self.detail_codes)
+    def _write_file(self, files_location, f, header_type, header_lines, detail_records):
+        '''
+        '''
+        out_name = f.rstrip(self.FILE_EXTENSION[1:])
+        with open(os.path.join(files_location, out_name + ".asv"), "w") as out:
+            
+            if header_type == "!Type:Bank":
+                self._write_file_header(out, header_type)
+                self._write_file_header_lines_bank(out, header_lines)
+                self._write_file_detail_lines_bank(out, detail_records)
+
+            elif header_type == "!Type:Cash":
+                self._write_file_header(out, header_type)
+
+            elif header_type == "!Type:Invst":
+                self._write_file_header(out, header_type)
+
+            elif header_type == "!Type:CCard":
+                self._write_file_header(out, header_type)
+
+            elif header_type == "!Type:Oth A":
+                self._write_file_header(out, header_type)
+
+            else:
+                pass
+
+
+    def _write_file_header(self, out, header_type):
+        '''
+        '''
+        out.write (self.HEADER_DICT[header_type] + "\n")
+
+    def _write_file_header_lines_bank(self, out, header_lines):
+        '''
+        '''
+        out.write ("{0}^{1}^{2}^{3}^{4}\n".format(header_lines["T"],
+                                            header_lines["D"],
+                                            header_lines["P"],
+                                            header_lines["C"],
+                                            header_lines["L"]))
+
+    def _write_file_detail_lines_bank(self, out, detail_records):
+        '''
+        '''
+        for record in detail_records:
+            out.write ("{0}^{1}^{2}^{3}^{4}^{5}^'{6}'^{7}^{8}^{9}\n".format(record["T"],
+                                                                    record["D"],
+                                                                    record["P"],
+                                                                    record["C"],
+                                                                    record["N"],
+                                                                    record["L"],
+                                                                    record["M"],
+                                                                    record["E"],
+                                                                    record["S"],
+                                                                    record["$"]))
 
     def _get_files(self, files_location):
         '''Get a list of the files.
         '''
         return fnmatch.filter(os.listdir(files_location), Convert.FILE_EXTENSION)
 
-    def _read_file(self, files_location, f):
-        '''Read the files.
+    def _split_into_records(self, files_location, f):
+        '''...
         '''
-        contents = open(os.path.join(files_location, f), "r")
-        for line in contents:
-            self._parse_line(line)
-            # print(line)
+        records = open(os.path.join(files_location, f), "r")
+        records_list = []
+        record = ""
+        for line in records:
+            if line[0] == self.RECORD_DELIMITER:
+                records_list.append(record)
+                record = ""
+            else:
+                record = record + line
 
-    def _parse_line(self, line):
+        return records_list
+
+    def _parse_records(self, records_list):
         '''...
         '''
-        first_char = line[0]
-        self._switch(first_char, line)
-        # if first_char == "!":
-        #     self.detail_codes.add(line)
-        # else:
-        #     self.detail_codes.add(first_char)
+        header = records_list.pop(0)
+        (header_type, header_lines) = self._get_header(header)
+        detail_records = self._get_items(records_list)
+        return [header_type, header_lines, detail_records]
         
-    def _switch(self, first_char, line):
+    def _get_items(self, records_list):
         '''...
         '''
+        detail_records = []
+        item_lines = {"I": "",
+                    "C": "",
+                    "P": "",
+                    "Y": "",
+                    "D": "",
+                    "Q": "",
+                    "T": "",
+                    "N": "",
+                    "L": "",
+                    "M": "",
+                    "$": "",
+                    "E": "",
+                    "S": ""}
+
+        for line in records_list:
+            items = line.splitlines()
+            for item in items:
+                first_char = item[0]
+                formatted = self._switch(first_char, item)
+
+                if first_char in "SE$":
+                    item_lines["M"] = item_lines["M"] + " " + formatted
+                    if first_char in "$":
+                        item_lines["M"] = item_lines["M"] + " - "
+                else:
+                    item_lines[first_char] = formatted
+
+            # detail_records.append(item_lines.copy())
+            detail_records.append(item_lines)
+            item_lines = {"I": "",
+                        "C": "",
+                        "P": "",
+                        "Y": "",
+                        "D": "",
+                        "Q": "",
+                        "T": "",
+                        "N": "",
+                        "L": "",
+                        "M": "",
+                        "$": "",
+                        "E": "",
+                        "S": ""}
+
+
+        return detail_records
+
+    def _get_header(self, header):
+        '''...
+        '''
+        lines = header.splitlines()
+        header_type = lines.pop(0)
+
+        if not header_type in self.HEADER_DICT.keys(): 
+            raise ValueError("The account type cannot be read.")
+
+        header_lines = {"I": "",
+                            "C": "",
+                            "P": "",
+                            "Y": "",
+                            "D": "",
+                            "Q": "",
+                            "T": "",
+                            "N": "",
+                            "L": "",
+                            "M": ""}
+        for line in lines:
+            first_char = line[0]
+            formatted = self._switch(first_char, line)
+            header_lines[first_char] = formatted
+
+        return [header_type, header_lines]
+
+    def _switch(self, first_char, line):
+        '''Format line.
+        '''
+        formatted = line[1:].strip()
+        self.codes.add(first_char)
+
         if first_char == "!":
-            pass
+            return formatted
         elif first_char == "I":
-            pass
+            return formatted
         elif first_char == "C":
-            pass
+            return formatted
         elif first_char == "P":
-            pass
+            return formatted
         elif first_char == "S":
-            pass
+            return formatted
         elif first_char == "$":
-            pass
+            return formatted
         elif first_char == "Y":
-            pass
+            return formatted
         elif first_char == "D":
-            pass
+            # "D5/15'2019"
+            if formatted.count("/") > 1:
+                month, day, year = map(int, formatted.split("/", 2))
+            else:
+                month_str, day_year = map(str, formatted.split("/", 1))
+                month = int(month_str)
+                day, year = map(int, day_year.split("'"))
+
+            formatted = datetime.datetime(year=year, month=month, day=day)
+            formatted= formatted.strftime("%d/%m/%Y")
+
+            return formatted
         elif first_char == "E":
-            pass
+            return formatted
         elif first_char == "Q":
-            pass
+            return formatted
         elif first_char == "T":
-            pass
+            return formatted
         elif first_char == "N":
-            pass
+            return formatted
         elif first_char == "L":
-            pass
+            return formatted
         elif first_char == "M":
-            pass
-        elif first_char == "^":
+            return formatted
+        elif first_char == self.RECORD_DELIMITER:
             # Throw exception.
-            pass
+            return formatted
         else:
             print(line)
-
-    # def save_m3u(self):
-    #     '''Save the class play list.
-    #     '''
-    #     playlist_file = open("./new lists/" + self.playlist_name.rstrip(".wpl") + self.FILE_EXTENSION, "w")  #, encoding="utf-8")
-    #     playlist_file.write(self.new_playlist)
-    #     playlist_file.close()
-
-    # def contains_letter(self, letter):
-    #     '''Get a list of words containing the letter.
-    #     '''
-    #     matcher = [letter]
-    #     words_containing_letter = [word for word in self.words if any(match in word for match in matcher)]
-    #     # (item for item in iterable if function(item))
-
-    #     # print (words_containing_letter)
-    #     print (len(words_containing_letter))
