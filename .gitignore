@@ -1,9 +1,18 @@
 # Data files.
-Money Export 22_02_2020
-csv
+*.qif
+*.csv
 
 # Log.
 qif2csv.Log
 
 
 __pycache__/Convert.cpython-38.pyc
+
+# PyCharm
+.idea
+
+# VSCode
+.vscode
+
+# CodeBuddy
+codebuddy

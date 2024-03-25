@@ -38,7 +38,7 @@ class Main:
     '''
     LOG_NAME = "qif2csv.log"
     logger = logging.getLogger(__name__)
-    FILES_LOCATION = "Money Export 22_02_2020"
+    FILES_LOCATION = "qif-data"
 
     def __init__(self):
         '''Do not use.
@@ -67,7 +67,7 @@ class Main:
         except Exception as ex:
             # pylint: disable=logging-format-interpolation
             cls.logger.critical("Error while running {0}".format(ex))
-            cls.logger.warn("Bad exit.")
+            cls.logger.warning("Bad exit.")
             sys.exit(-1)
 
         finally:
