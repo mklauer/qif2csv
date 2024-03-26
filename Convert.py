@@ -24,6 +24,34 @@ import fnmatch
 import logging
 import os
 
+HEADER_ENGLISH = {"I": "Price",
+                  "C": "Cleared status",
+                  "P": "Payee",
+                  "Y": "Security Name",
+                  "D": "Date",
+                  "Q": "Quantity of Shares",
+                  "T": "Amount",
+                  "N": "Check Number",
+                  "L": "Category",
+                  "M": "Memo",
+                  "E": "Split Memo",
+                  "S": "Split Category",
+                  "$": "Amount transferred"}
+
+HEADER_MLP = {"I": "Kurs",
+              "C": "Abgeglichen",
+              "P": "Empfänger/Zahlungspflichtiger",
+              "Y": "Security Name",
+              "D": "Valuta",
+              "Q": "Quantity of Shares",
+              "T": "Umsatz",
+              "N": "Check Number",
+              "L": "Category",
+              "M": "Vorgang/Verwendungszweck",
+              "E": "Split Memo",
+              "S": "Split Category",
+              "$": "Amount transferred"}
+
 BANK_FIELDS = ["T", "D", "P", "C", "N", "L", "M", "E", "S", "$"]
 
 
@@ -158,51 +186,22 @@ class Convert:
             return "", [], []
 
     def _get_items(self, records_list):
-        '''...
-        '''
         detail_records = []
-        item_lines = {"I": "",
-                      "C": "",
-                      "P": "",
-                      "Y": "",
-                      "D": "",
-                      "Q": "",
-                      "T": "",
-                      "N": "",
-                      "L": "",
-                      "M": "",
-                      "$": "",
-                      "E": "",
-                      "S": ""}
 
         for line in records_list:
-            items = line.splitlines()
-            for item in items:
+            item_lines = {k: "" for k in "ICPYDQTNLME$S"}
+            for item in line.splitlines():
                 first_char = item[0]
                 formatted = self._switch(first_char, item)
 
                 if first_char in "SE$":
-                    item_lines["M"] = item_lines["M"] + " " + formatted
-                    if first_char in "$":
-                        item_lines["M"] = item_lines["M"] + " - "
+                    item_lines["M"] += " " + formatted
+                    if first_char == "$":
+                        item_lines["M"] += " - "
                 else:
                     item_lines[first_char] = formatted
 
-            # detail_records.append(item_lines.copy())
             detail_records.append(item_lines)
-            item_lines = {"I": "",
-                          "C": "",
-                          "P": "",
-                          "Y": "",
-                          "D": "",
-                          "Q": "",
-                          "T": "",
-                          "N": "",
-                          "L": "",
-                          "M": "",
-                          "$": "",
-                          "E": "",
-                          "S": ""}
 
         return detail_records
 
@@ -215,22 +214,10 @@ class Convert:
         while not header_type.startswith("!Type:"):
             header_type = lines.pop(0)
         header_type = header_type.strip()
-        if not header_type in self.HEADER_DICT.keys():
+        if header_type not in self.HEADER_DICT.keys():
             raise ValueError("The account type cannot be read.")
 
-        header_lines = {"I": "Price",
-                        "C": "Cleared status",
-                        "P": "Payee",
-                        "Y": "Security Name",
-                        "D": "Date",
-                        "Q": "Quantity of Shares",
-                        "T": "Amount",
-                        "N": "Check Number",
-                        "L": "Category",
-                        "M": "Memo",
-                        "E": "Split Memo",
-                        "S": "Split Category",
-                        "$": "Amount transferred"}
+        header_lines = HEADER_MLP
 
         return [header_type, header_lines]
 
